@@ -1,0 +1,42 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+.cache/
+*.tsbuildinfo
+
+# Local configuration and credentials; only the safe template is shared
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# User data, SQLite sidecars, and local backups
+data/
+backups/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.bak
+
+# Test artifacts and runtime logs
+test-results/
+playwright-report/
+blob-report/
+*.log
+
+# Machine-specific editor and agent settings
+.vscode/
+.idea/
+.codex/
+.agents/
+.DS_Store
+Thumbs.db
+Desktop.ini
