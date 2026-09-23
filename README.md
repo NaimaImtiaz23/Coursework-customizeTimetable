@@ -1,43 +1,158 @@
 # Coursework
 
-A complete student registration app with a searchable course catalog, weekly timetable, automatic section selection, seat limits, waitlists, and calendar export.
+**Course registration, conflict-free timetable planning, and automated waitlist management.**
 
-## Run locally
+Coursework is a full-stack student registration application built with React, Express, and SQLite. Students can explore course sections, plan a weekly schedule, reserve available seats, and join waitlists. Transactional registration protects limited seats from concurrent requests, while a background worker promotes eligible students when seats become available.
 
-Requires Node.js 24 or newer.
+The application provides a responsive, text-first interface with a searchable catalog, weekly and daily timetable views, and explicit enrollment status.
+
+## Features
+
+- **Course discovery:** Search the sample catalog, filter by department, and find sections with open seats.
+- **Timetable planning:** Find section combinations that respect existing enrollments, meeting times, and the 18-credit limit.
+- **Registration:** Enroll with duplicate-course and timetable-conflict checks.
+- **Waitlists:** Track queue positions and receive in-app notifications after automatic promotion.
+- **Calendar export:** Download enrolled classes as a recurring iCalendar (`.ics`) schedule.
+- **Student accounts:** Register, sign in, and retain enrollments across sessions and server restarts.
+
+## Technology Stack
+
+| Layer                   | Technology                                             |
+| ----------------------- | ------------------------------------------------------ |
+| Frontend                | React 19, CSS, Vite                                    |
+| Backend                 | Node.js 24+, Express 5                                 |
+| Database                | SQLite through Node.js `node:sqlite`, with WAL enabled |
+| Validation and security | Zod, Helmet, express-rate-limit, Node.js crypto        |
+| Testing                 | Node.js test runner, Playwright                        |
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js **24 or later** and npm
+- Git
+- Microsoft Edge for the default browser tests, or Playwright Chromium
+
+### Installation
 
 ```sh
-npm install
+git clone https://github.com/NaimaImtiaz23/Coursework-customizeTimetable.git
+cd Coursework-customizeTimetable
+npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. Choose **Try demo** for a separate sample student with three courses, or create an account with a password of at least 12 characters. Demo access is disabled in production. The catalog is sample data, not a university integration.
+Open **http://localhost:3000**. Create an account with a password of at least 12 characters, or select **Try demo** to create a separate sample student with initial registrations. Demo access is disabled in production.
 
-SQLite is connected automatically. Persistent data lives in `data/coursework.db`; no separate database installation or credentials are needed. Restarting the server preserves accounts, sessions, courses, and queues. The single-seat CS 240 section A makes waitlist behavior easy to exercise using two accounts in separate browser profiles.
+The application creates and seeds `data/coursework.db` automatically. A separate database service is not required. Accounts, registrations, sessions, notifications, and pending promotion jobs persist in this file. Local database files are excluded from Git.
 
-## Commands
+### Explore the Waitlist Flow
 
-```sh
-npm test             # domain, API security, and multi-connection race tests
-npm run build       # production frontend
-npm start           # production server, configuration required below
-npm run worker      # optional separate promotion worker
-npx playwright test # starts an isolated test server automatically
+Use two accounts in separate browser profiles and select **CS 240, section A**, which has one seat in the sample catalog. The first student enrolls; the next joins the waitlist. When the enrolled student drops the section, the worker promotes the next eligible student and creates a notification.
+
+The worker checks pending jobs every three seconds. Signed-in workspaces refresh every ten seconds.
+
+## Available Commands
+
+| Command            | Purpose                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `npm run dev`      | Start the API, frontend development server, and embedded worker |
+| `npm run build`    | Build the frontend into `dist/`                                 |
+| `npm start`        | Start the production server with production configuration       |
+| `npm run worker`   | Run an additional standalone promotion worker                   |
+| `npm test`         | Run backend, security, and concurrent-registration tests        |
+| `npm run test:e2e` | Run desktop and mobile browser tests                            |
+| `npm run format`   | Format project source and documentation                         |
+
+## Configuration
+
+Local development works with the default settings. For custom settings, create a `.env` file using [`.env.example`](.env.example) as the template. Keep real environment files outside version control.
+
+| Variable          | Default                   | Description                                      |
+| ----------------- | ------------------------- | ------------------------------------------------ |
+| `PORT`            | `3000`                    | HTTP server port                                 |
+| `HOST`            | `127.0.0.1`               | Network interface to bind                        |
+| `DATABASE_PATH`   | `data/coursework.db`      | SQLite database location                         |
+| `APP_ORIGIN`      | `http://localhost:<PORT>` | Exact origin permitted for mutation requests     |
+| `COOKIE_SECURE`   | `false`                   | Require HTTPS for session cookies when `true`    |
+| `TRUSTED_PROXIES` | Empty                     | Comma-separated trusted proxy addresses or CIDRs |
+| `HMR_PORT`        | `24678`                   | Frontend development WebSocket port              |
+
+## Architecture
+
+```text
+src/
+  components/          Timetable and dialog components
+  lib/                 API client and schedule helpers
+  main.jsx             Student workspace and application state
+  styles.css           Responsive layout and visual styles
+server/
+  db.js                Schema, indexes, capacity triggers, seed data
+  registration.js      Enrollment rules, planner, and promotion logic
+  auth.js              Password hashing and server-side sessions
+  app.js               HTTP routes, validation, and security middleware
+  worker.js            Promotion jobs and expired-session cleanup
+  index.js             Configuration and server startup
+tests/
+  api.test.js          Authentication, authorization, and proxy tests
+  registration.test.js Domain rules and concurrency tests
+  race-worker.js       Independent database connection test helper
+  browser/             Desktop and mobile workflow tests
 ```
 
-The application runs a promotion worker every three seconds. A standalone worker can share the same local database; transaction locks make concurrent workers safe. API polling refreshes signed-in workspaces every ten seconds.
+### Registration and Concurrency
 
-Browser tests use locally installed Microsoft Edge. On systems without Edge, install Playwright Chromium with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. Tests start their own server on port 3100 with a fresh in-memory database and refuse to reuse an existing server. Your development database is untouched.
+Enrollment and promotion execute inside SQLite `BEGIN IMMEDIATE` transactions. Competing writers are serialized, ensuring that availability checks and seat allocation occur under the same lock. Database triggers independently prevent section capacity from being exceeded.
 
-## Publishing to GitHub
+Batch registration is atomic: either every selected registration succeeds or the transaction rolls back. Dropping a registration and scheduling its promotion job also happen in one transaction. Worker failures leave unfinished jobs available for retry.
 
-Commit the source, tests, `package.json`, `package-lock.json`, configuration files, and this README. `.env.example` contains placeholders and is safe to share. The `.gitignore` excludes local environment files, database files (including SQLite sidecars), backups, logs, browser test artifacts, dependencies, build output, and machine-specific settings.
+### Waitlist Policy
 
-Before each commit, inspect `git status --short` and `git diff --cached`. Do not force-add ignored files. Ignore rules are not encryption and do not remove files from existing Git history. If a credential is ever committed, revoke or rotate it before cleaning the history. A fresh clone creates its own sample database when started; your existing accounts and registrations remain local.
+Queue order follows registration IDs. Promotion selects the first eligible student, rechecking timetable conflicts, duplicate enrollment, and the credit limit. An ineligible student retains their queue position while another eligible student may receive the seat. Dropping a conflicting course requeues that student's waitlisted sections for evaluation.
 
-## Configuration and deployment
+Waitlisted courses do not reserve timetable slots. New registrations cannot bypass an existing queue.
 
-The server reads `.env` if present. See `.env.example`. In production set:
+### Timetable Planning
+
+The planner keeps existing enrollments fixed and searches section combinations, rejecting overlaps and excess credits. Students can optionally include full sections. Availability is checked again at confirmation; a section that fills after the preview is waitlisted.
+
+## Security and Data Handling
+
+- Salted scrypt password hashes; plaintext passwords are not stored.
+- Random session tokens stored as hashes, with a seven-day session lifetime.
+- HttpOnly, SameSite cookies, with Secure cookies required for production startup.
+- CSRF tokens and origin validation on authenticated mutations.
+- Parameterized SQL, bounded request bodies, and server-side input validation.
+- Account-scoped authorization, request rate limits, Helmet headers, and production CSP.
+- Audit records for enrollment, removal, and promotion actions.
+
+User data remains in the configured database. Search filters, active views, and unconfirmed planner selections are temporary frontend state and are not saved as account preferences.
+
+The repository excludes local databases, SQLite sidecars, environment files, private keys, backups, logs, test artifacts, dependencies, and build output. Review staged changes before committing; ignore rules do not remove sensitive data already committed to history.
+
+## Testing
+
+```sh
+npm test
+npm run test:e2e
+npm run build
+```
+
+Backend tests cover conflict detection, credit limits, duplicate registrations, atomic rollback, queue ordering, promotion eligibility, capacity triggers, and independent database connections competing for one seat. API tests cover authentication, CSRF, ownership, validation, logout, and proxy trust.
+
+Browser tests cover registration, planner confirmation, persistence after reload, calendar export, mobile navigation, and layout fit. Playwright starts an isolated server on port **3100**, uses WebSocket port **24778**, and creates a fresh in-memory database. It refuses to reuse an existing server and does not modify the development database.
+
+The default browser is locally installed Microsoft Edge. To use Chromium instead:
+
+```sh
+npx playwright install chromium
+```
+
+Then set `PLAYWRIGHT_CHANNEL=chromium` before running `npm run test:e2e`.
+
+## Deployment
+
+Build the frontend and configure an HTTPS reverse proxy before starting production:
 
 ```dotenv
 NODE_ENV=production
@@ -49,34 +164,31 @@ DATABASE_PATH=/srv/coursework/data/coursework.db
 TRUSTED_PROXIES=127.0.0.1/32,::1/128
 ```
 
-Build before starting. Terminate HTTPS at a reverse proxy and forward to the app on its loopback port. The server refuses production startup without an explicit origin and secure cookies. Mount the database directory on a persistent **local** disk. Do not use SQLite WAL on a network filesystem. This implementation targets one application host; for multiple hosts, migrate the transaction layer to PostgreSQL and use row locking.
+```sh
+npm ci
+npm run build
+npm start
+```
 
-Back up SQLite with its backup API or stop all app/worker processes before copying the database together with any WAL files. Restrict OS access to the database and backups. Keep dependencies updated and run `npm audit` before deploying. This is a working project, not a security certification or an institution-ready identity system. University SSO, email verification/recovery, institutional enrollment rules, catalog administration, and operational monitoring require institution-specific integration.
+The server requires an explicit HTTPS origin and secure cookies for production. Set `TRUSTED_PROXIES` only to the actual proxy addresses; the example trusts a proxy on the same machine. The proxy must overwrite forwarded client headers. Leave this setting empty for direct connections.
 
-## Architecture
+Store the database on persistent local disk and restrict access to the application account. Do not place SQLite WAL files on a network filesystem. Back up using a SQLite-aware backup mechanism, or stop every process using the database before copying it and any remaining sidecar files.
 
-Set `TRUSTED_PROXIES` only to your reverse proxy's actual addresses or CIDRs. Leave it empty for direct connections. The proxy must overwrite forwarding headers; trusting arbitrary clients would allow rate-limit evasion. The example above trusts only a proxy on the same machine.
+This architecture targets a single application host. Deployments across multiple hosts require a shared database design, such as PostgreSQL with appropriate transaction locking, and shared rate-limit storage.
 
-- `server/db.js`: schema, indexes, capacity triggers, sample catalog, transaction boundary.
-- `server/registration.js`: enrollment, clash and credit checks, FIFO eligible promotion, atomic batch registration, backtracking planner.
-- `server/auth.js`: salted scrypt password hashes and opaque server-side sessions.
-- `server/app.js`: validated HTTP endpoints, authorization and security middleware.
-- `server/worker.js`: durable job processing and expired session cleanup.
-- `src/main.jsx`: student workspace, accessible dialogs, course filtering, planner preview, weekly/day views, notifications, ICS download.
-- `src/styles.css`: responsive interface and timetable layout.
+## Current Scope
 
-Every enrollment and promotion uses `BEGIN IMMEDIATE`. This serializes competing SQLite writers across processes, so seat counts and writes happen under the same lock. Database triggers add an independent seat-capacity invariant. Batch confirmation commits all selections or rolls them all back. A dropped seat and its promotion job are committed together. A crashed worker leaves its transaction and job available for retry; successful promotion and its notification commit together.
+The application includes a sample catalog for **Fall 2026** and does not connect to a university registration system. Calendar exports use campus-local floating times from September 7 through December 18.
 
-Waitlists use registration IDs for deterministic FIFO ordering. Promotion checks conflicts, duplicate courses, and the 18-credit maximum again. Ineligible students keep their position while the next eligible student can be promoted. Dropping a conflicting enrollment requeues the student's waitlisted sections. Waitlisted courses do not hold calendar slots. New registrations cannot bypass an existing waitlist.
+University SSO, email verification, password recovery, catalog administration, institutional enrollment policies, and operational monitoring are not included. Production use requires deployment-specific review and integration.
 
-The planner keeps current enrollments fixed, searches section combinations, and prunes overlaps and excessive credit loads. Availability is advisory until confirmation; a section that fills between preview and confirmation is waitlisted. The semester is fixed to Fall 2026 in this version. Calendar exports use floating campus-local times, recurring from September 7 through December 18.
+## Collaborators
 
-## Security controls
+- [Naima Imtiaz](https://github.com/NaimaImtiaz23)
+- [Zoraiz](https://github.com/Zoraiz03)
 
-Parameterized SQL, bounded request bodies, Zod validation, account-scoped queries, scrypt password hashing, hashed session tokens, HttpOnly/SameSite cookies, CSRF tokens, strict mutation-origin checks, rate limiting, Helmet headers, production CSP, and audit events are implemented. Session lifetime is seven days. Authentication errors do not reveal whether login emails exist. React escapes user content; no raw HTML injection is used. Demo accounts have random inaccessible passwords and are only available in development.
+Developed jointly with AI-assisted implementation and review. Module-based commits record primary authors and co-author attribution for the shared work.
 
-## Interface references
+## Acknowledgments
 
-The design uses compact navigation, explicit labels, restrained color, and persistent enrollment status. Research references: [NN/g on minimalist interfaces](https://www.nngroup.com/articles/characteristics-minimalism/) and [GOV.UK on validation feedback](https://design-system.service.gov.uk/components/error-summary/).
-
-Fonts: DM Sans and Manrope, licensed under the SIL Open Font License.
+Interface references include [Nielsen Norman Group's minimalist design research](https://www.nngroup.com/articles/characteristics-minimalism/) and [GOV.UK validation guidance](https://design-system.service.gov.uk/components/error-summary/). DM Sans and Manrope are distributed under the SIL Open Font License.
