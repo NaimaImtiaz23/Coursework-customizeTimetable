@@ -64,19 +64,6 @@ The worker checks pending jobs every three seconds. Signed-in workspaces refresh
 | `npm run test:e2e` | Run desktop and mobile browser tests                            |
 | `npm run format`   | Format project source and documentation                         |
 
-## Configuration
-
-Local development works with the default settings. For custom settings, create a `.env` file using [`.env.example`](.env.example) as the template. Keep real environment files outside version control.
-
-| Variable          | Default                   | Description                                      |
-| ----------------- | ------------------------- | ------------------------------------------------ |
-| `PORT`            | `3000`                    | HTTP server port                                 |
-| `HOST`            | `127.0.0.1`               | Network interface to bind                        |
-| `DATABASE_PATH`   | `data/coursework.db`      | SQLite database location                         |
-| `APP_ORIGIN`      | `http://localhost:<PORT>` | Exact origin permitted for mutation requests     |
-| `COOKIE_SECURE`   | `false`                   | Require HTTPS for session cookies when `true`    |
-| `TRUSTED_PROXIES` | Empty                     | Comma-separated trusted proxy addresses or CIDRs |
-| `HMR_PORT`        | `24678`                   | Frontend development WebSocket port              |
 
 ## Architecture
 
@@ -150,32 +137,6 @@ npx playwright install chromium
 
 Then set `PLAYWRIGHT_CHANNEL=chromium` before running `npm run test:e2e`.
 
-## Deployment
-
-Build the frontend and configure an HTTPS reverse proxy before starting production:
-
-```dotenv
-NODE_ENV=production
-HOST=127.0.0.1
-PORT=3000
-APP_ORIGIN=https://courses.example.edu
-COOKIE_SECURE=true
-DATABASE_PATH=/srv/coursework/data/coursework.db
-TRUSTED_PROXIES=127.0.0.1/32,::1/128
-```
-
-```sh
-npm ci
-npm run build
-npm start
-```
-
-The server requires an explicit HTTPS origin and secure cookies for production. Set `TRUSTED_PROXIES` only to the actual proxy addresses; the example trusts a proxy on the same machine. The proxy must overwrite forwarded client headers. Leave this setting empty for direct connections.
-
-Store the database on persistent local disk and restrict access to the application account. Do not place SQLite WAL files on a network filesystem. Back up using a SQLite-aware backup mechanism, or stop every process using the database before copying it and any remaining sidecar files.
-
-This architecture targets a single application host. Deployments across multiple hosts require a shared database design, such as PostgreSQL with appropriate transaction locking, and shared rate-limit storage.
-
 ## Current Scope
 
 The application includes a sample catalog for **Fall 2026** and does not connect to a university registration system. Calendar exports use campus-local floating times from September 7 through December 18.
@@ -186,8 +147,6 @@ University SSO, email verification, password recovery, catalog administration, i
 
 - [Naima Imtiaz](https://github.com/NaimaImtiaz23)
 - [Zoraiz](https://github.com/Zoraiz03)
-
-Developed jointly with AI-assisted implementation and review. Module-based commits record primary authors and co-author attribution for the shared work.
 
 ## Acknowledgments
 
